@@ -330,7 +330,7 @@ class TyperArgument(_click.core.Parameter):
         if self.hidden:
             return None
         name = self.make_metavar(ctx=ctx)
-        help = self.help or ""
+        help = str(self.help) if self.help else ""
         extra = []
         if self.show_envvar:
             envvar = self.envvar
@@ -776,7 +776,7 @@ class TyperOption(_click.Parameter):
         if self.secondary_opts:
             rv.append(_write_opts(self.secondary_opts))
 
-        help = self.help or ""
+        help = str(self.help) if self.help else ""
         extra = []
 
         if self.show_envvar:

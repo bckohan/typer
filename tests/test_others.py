@@ -486,3 +486,33 @@ def test_options_metadata_typer_default():
 
     result = runner.invoke(app, ["c2", "--help"])
     assert "Usage: root c2 [OPTS]" in result.stdout
+
+
+@pytest.mark.parametrize("rich_markup_mode", [None, "rich"])
+def test_help_accepts_lazy_str_proxies(rich_markup_mode):
+    # e.g. Django's gettext_lazy proxies: not a str, but delegate str methods
+    class LazyStr:
+        def __init__(self, value: str) -> None:
+            self._value = value
+
+        def __str__(self) -> str:
+            return self._value
+
+        def __getattr__(self, name: str) -> typing.Any:
+            return getattr(self._value, name)
+
+    app = typer.Typer(rich_markup_mode=rich_markup_mode)
+
+    @app.command()
+    def main(
+        name: Annotated[
+            str, typer.Argument(help=LazyStr("Lazy argument help"), show_default=False)
+        ] = "default",
+        opt: Annotated[str, typer.Option(help=LazyStr("Lazy option help"))] = "x",
+    ):
+        pass  # pragma: no cover
+
+    result = runner.invoke(app, ["--help"])
+    assert result.exit_code == 0, result.output
+    assert "Lazy argument help" in result.output
+    assert "Lazy option help" in result.output
