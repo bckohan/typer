@@ -7,6 +7,7 @@ from difflib import get_close_matches
 from enum import Enum
 from gettext import gettext as _
 from typing import (
+    TYPE_CHECKING,
     Any,
     TextIO,
     Union,
@@ -19,7 +20,11 @@ from ._click.parser import _OptionParser
 from ._click.shell_completion import CompletionItem
 from ._typing import Literal
 from .exceptions import Abort, Exit
+from .models import RichConsoleFactory
 from .utils import parse_boolean_env_var
+
+if TYPE_CHECKING:  # pragma: no cover
+    from rich.console import Console  # noqa: TID251
 
 MarkupMode = Literal["markdown", "rich", None]
 MARKUP_MODE_KEY = "TYPER_RICH_MARKUP_MODE"
@@ -30,6 +35,19 @@ if HAS_RICH:
     DEFAULT_MARKUP_MODE: MarkupMode = "rich"
 else:
     DEFAULT_MARKUP_MODE = None
+
+
+def _get_console(
+    factory: RichConsoleFactory | None, *, stderr: bool
+) -> "Console | None":
+    """Build a Console with the user provided factory, if any.
+
+    Returns None when no factory is configured so that rich_utils can lazily
+    create its default Console (avoiding importing Rich here).
+    """
+    if factory is None:
+        return None
+    return factory(stderr)
 
 
 # Copy from _click.parser._split_opt
@@ -164,6 +182,7 @@ def _main(
     standalone_mode: bool = True,
     windows_expand_args: bool = True,
     rich_markup_mode: MarkupMode = DEFAULT_MARKUP_MODE,
+    rich_console_factory: RichConsoleFactory | None = None,
     **extra: Any,
 ) -> Any:
     # Originally copied from _click.main(), adopted to handle custom rich exceptions etc
@@ -206,7 +225,9 @@ def _main(
             if HAS_RICH and rich_markup_mode is not None:
                 from . import rich_utils
 
-                rich_utils.rich_format_error(e)
+                rich_utils.rich_format_error(
+                    e, console=_get_console(rich_console_factory, stderr=True)
+                )
             else:
                 e.show()
             sys.exit(e.exit_code)
@@ -236,7 +257,9 @@ def _main(
         if HAS_RICH and rich_markup_mode is not None:
             from . import rich_utils
 
-            rich_utils.rich_abort_error()
+            rich_utils.rich_abort_error(
+                console=_get_console(rich_console_factory, stderr=True)
+            )
         else:
             _click.echo(_("Aborted!"), file=sys.stderr)
         sys.exit(1)
@@ -919,6 +942,7 @@ class TyperCommand(_click.core.Command):
         # Rich settings
         rich_markup_mode: MarkupMode = DEFAULT_MARKUP_MODE,
         rich_help_panel: str | None = None,
+        rich_console_factory: RichConsoleFactory | None = None,
     ) -> None:
         super().__init__(
             name=name,
@@ -936,6 +960,7 @@ class TyperCommand(_click.core.Command):
         )
         self.rich_markup_mode: MarkupMode = rich_markup_mode
         self.rich_help_panel = rich_help_panel
+        self.rich_console_factory = rich_console_factory
 
     def format_options(
         self, ctx: _click.Context, formatter: _click.HelpFormatter
@@ -969,6 +994,7 @@ class TyperCommand(_click.core.Command):
             standalone_mode=standalone_mode,
             windows_expand_args=windows_expand_args,
             rich_markup_mode=self.rich_markup_mode,
+            rich_console_factory=self.rich_console_factory,
             **extra,
         )
 
@@ -985,6 +1011,7 @@ class TyperCommand(_click.core.Command):
             obj=self,
             ctx=ctx,
             markup_mode=self.rich_markup_mode,
+            console=_get_console(self.rich_console_factory, stderr=False),
         )
 
 
@@ -1002,6 +1029,7 @@ class TyperGroup(_click.Command):
         # Rich settings
         rich_markup_mode: MarkupMode = DEFAULT_MARKUP_MODE,
         rich_help_panel: str | None = None,
+        rich_console_factory: RichConsoleFactory | None = None,
         suggest_commands: bool = True,
         # Click settings
         invoke_without_command: bool = False,
@@ -1013,6 +1041,7 @@ class TyperGroup(_click.Command):
         super().__init__(name=name, **attrs)
         self.rich_markup_mode: MarkupMode = rich_markup_mode
         self.rich_help_panel = rich_help_panel
+        self.rich_console_factory = rich_console_factory
         self.suggest_commands = suggest_commands
 
         # copied from Click's init
@@ -1202,6 +1231,7 @@ class TyperGroup(_click.Command):
             standalone_mode=standalone_mode,
             windows_expand_args=windows_expand_args,
             rich_markup_mode=self.rich_markup_mode,
+            rich_console_factory=self.rich_console_factory,
             **extra,
         )
 
@@ -1214,6 +1244,7 @@ class TyperGroup(_click.Command):
             obj=self,
             ctx=ctx,
             markup_mode=self.rich_markup_mode,
+            console=_get_console(self.rich_console_factory, stderr=False),
         )
 
     def list_commands(self, ctx: _click.Context) -> list[str]:

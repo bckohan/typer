@@ -17,8 +17,15 @@ from ._click import types
 from ._click.shell_completion import CompletionItem
 
 if TYPE_CHECKING:  # pragma: no cover
+    from rich.console import Console  # noqa: TID251
+
     from .core import TyperCommand, TyperGroup
     from .main import Typer
+
+# A callable that returns the Rich Console Typer uses to print help, errors and
+# tracebacks. Receives a single positional argument: True when the output goes to
+# stderr, False when it goes to stdout.
+RichConsoleFactory = Callable[[bool], "Console"]
 
 
 NoneType = type(None)
@@ -639,10 +646,12 @@ class DeveloperExceptionConfig:
         pretty_exceptions_enable: bool = True,
         pretty_exceptions_show_locals: bool = True,
         pretty_exceptions_short: bool = True,
+        rich_console_factory: RichConsoleFactory | None = None,
     ) -> None:
         self.pretty_exceptions_enable = pretty_exceptions_enable
         self.pretty_exceptions_show_locals = pretty_exceptions_show_locals
         self.pretty_exceptions_short = pretty_exceptions_short
+        self.rich_console_factory = rich_console_factory
 
 
 class TyperPath(types.ParamType):

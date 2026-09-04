@@ -142,9 +142,16 @@ def _has_ansi_character(text: str) -> bool:
     return ANSI_PREFIX in text
 
 
-def _get_rich_console(stderr: bool = False) -> Console:
-    return Console(
-        theme=Theme(
+def get_rich_console(stderr: bool = False, **console_kwargs: Any) -> Console:
+    """Create the Rich Console Typer uses by default to print help, errors and
+    tracebacks, configured with Typer's theme and highlighter.
+
+    Any extra keyword arguments are passed to `rich.console.Console` and take
+    precedence over Typer's defaults. This is useful when building a custom
+    `rich_console_factory` that only needs to tweak a few settings.
+    """
+    kwargs: dict[str, Any] = {
+        "theme": Theme(
             {
                 "option": STYLE_OPTION,
                 "switch": STYLE_SWITCH,
@@ -155,12 +162,18 @@ def _get_rich_console(stderr: bool = False) -> Console:
                 "usage": STYLE_USAGE,
             },
         ),
-        highlighter=highlighter,
-        color_system=COLOR_SYSTEM,
-        force_terminal=FORCE_TERMINAL,
-        width=MAX_WIDTH,
-        stderr=stderr,
-    )
+        "highlighter": highlighter,
+        "color_system": COLOR_SYSTEM,
+        "force_terminal": FORCE_TERMINAL,
+        "width": MAX_WIDTH,
+        "stderr": stderr,
+    }
+    kwargs.update(console_kwargs)
+    return Console(**kwargs)
+
+
+# Kept for backwards compatibility with code that imported the private name
+_get_rich_console = get_rich_console
 
 
 def _make_rich_text(
@@ -557,6 +570,7 @@ def rich_format_help(
     obj: _click.Command | TyperGroup,
     ctx: _click.Context,
     markup_mode: MarkupModeStrict,
+    console: Console | None = None,
 ) -> None:
     """Print nicely formatted help text using rich.
 
@@ -566,7 +580,8 @@ def rich_format_help(
     Replacement for the click function format_help().
     Takes a command or group and builds the help text output.
     """
-    console = _get_rich_console()
+    if console is None:
+        console = get_rich_console()
 
     # Print usage
     console.print(
@@ -694,7 +709,9 @@ def rich_format_help(
         console.print(Padding(Align(epilogue_text, pad=False), 1))
 
 
-def rich_format_error(self: _click.ClickException) -> None:
+def rich_format_error(
+    self: _click.ClickException, console: Console | None = None
+) -> None:
     """Print richly formatted click errors.
 
     Called by custom exception handler to print richly formatted click errors.
@@ -704,7 +721,8 @@ def rich_format_error(self: _click.ClickException) -> None:
     if self.__class__.__name__ == "NoArgsIsHelpError":
         return
 
-    console = _get_rich_console(stderr=True)
+    if console is None:
+        console = get_rich_console(stderr=True)
     ctx: _click.Context | None = getattr(self, "ctx", None)
     if ctx is not None:
         console.print(highlighter(ctx.get_usage()), style=STYLE_USAGE_COMMAND)
@@ -728,9 +746,10 @@ def rich_format_error(self: _click.ClickException) -> None:
     )
 
 
-def rich_abort_error() -> None:
+def rich_abort_error(console: Console | None = None) -> None:
     """Print richly formatted abort error."""
-    console = _get_rich_console(stderr=True)
+    if console is None:
+        console = get_rich_console(stderr=True)
     console.print(ABORTED_TEXT, style=STYLE_ABORTED)
 
 
@@ -754,7 +773,7 @@ def rich_to_html(input_text: str) -> str:
 
 def rich_render_text(text: str) -> str:
     """Remove rich tags and render a pure text representation"""
-    console = _get_rich_console()
+    console = get_rich_console()
     return "".join(segment.text for segment in console.render(text)).rstrip("\n")
 
 

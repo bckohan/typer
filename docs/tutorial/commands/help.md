@@ -502,3 +502,73 @@ $ uv run python main.py --help
 ```
 
 </div>
+
+## Customize the Rich Console
+
+**Typer** creates a Rich `Console` to print the help, usage errors, and pretty exception tracebacks.
+
+If you need to control how that console is configured, for example to limit its width, force or disable colors, or send the output to a different file, you can pass a `rich_console_factory` to `typer.Typer()`.
+
+The factory is a function that receives a single boolean argument, `True` when the output goes to standard error and `False` when it goes to standard output, and returns a Rich `Console`:
+
+{* docs_src/commands/help/tutorial009_py310.py hl[4:8,11] *}
+
+You can use `typer.rich_utils.get_rich_console()` to start from the console **Typer** would create by default, including its theme and highlighter, and override only the settings you need. Any extra keyword arguments are passed to the Rich `Console`.
+
+Now the help is limited to 60 characters, even in a wider terminal:
+
+<div class="termy">
+
+```console
+$ uv run python main.py --help
+
+ Usage: main.py [OPTIONS] {username}
+
+ Create a new user.
+
+╭─ Arguments ──────────────────────────────────────────────╮
+│ *    username      <str>  [required]                     │
+╰──────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────╮
+│ --install-completion          Install completion for the │
+│                               current shell.             │
+│ --show-completion             Show completion for the    │
+│                               current shell, to copy it  │
+│                               or customize the           │
+│                               installation.              │
+│ --help                        Show this message and      │
+│                               exit.                      │
+╰──────────────────────────────────────────────────────────╯
+```
+
+</div>
+
+And the same console configuration is used for usage errors:
+
+<div class="termy">
+
+```console
+$ uv run python main.py
+
+Usage: main.py [OPTIONS] {username}
+Try 'main.py --help' for help.
+╭─ Error ──────────────────────────────────────────────────╮
+│ Missing argument 'username'.                             │
+╰──────────────────────────────────────────────────────────╯
+```
+
+</div>
+
+/// tip
+
+Import `typer.rich_utils` inside the factory function instead of at the top of your module. **Typer** only imports Rich when it needs to print something, this keeps the startup of your app fast.
+
+///
+
+The same factory is used for the whole app, including sub apps added with `add_typer()`, and for the [pretty exception tracebacks](../exceptions.md#exceptions-with-rich).
+
+/// info
+
+When no factory is set, **Typer** reads some environment variables to configure the default console: `TERMINAL_WIDTH` sets the width, and `FORCE_COLOR` or `PY_COLORS` force colored output even when not writing to a terminal. Rich itself honors `NO_COLOR` to disable colors.
+
+///

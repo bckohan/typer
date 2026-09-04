@@ -41,6 +41,12 @@ $ uv run python main.py
 
 </div>
 
+/// tip
+
+The traceback is printed with the same Rich console **Typer** uses for the help. You can configure it, for example to change its width or colors, with a `rich_console_factory`, see [Customize the Rich Console](commands/help.md#customize-the-rich-console).
+
+///
+
 ## Exceptions without Rich
 
 You can disable Rich globally using the environmental variable `TYPER_USE_RICH`.

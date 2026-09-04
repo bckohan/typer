@@ -49,6 +49,7 @@ from .models import (
     ParameterInfo,
     ParamMeta,
     Required,
+    RichConsoleFactory,
     TyperInfo,
     TyperPath,
 )
@@ -82,7 +83,10 @@ def except_hook(
         from . import rich_utils
 
         rich_tb = rich_utils.get_traceback(exc, exception_config, internal_dir_names)
-        console_stderr = rich_utils._get_rich_console(stderr=True)
+        if exception_config.rich_console_factory is not None:
+            console_stderr = exception_config.rich_console_factory(True)
+        else:
+            console_stderr = rich_utils.get_rich_console(stderr=True)
         console_stderr.print(rich_tb)
         return
     tb_exc = traceback.TracebackException.from_exception(exc)
@@ -443,6 +447,42 @@ class Typer:
                 """
             ),
         ] = Default(None),
+        rich_console_factory: Annotated[
+            RichConsoleFactory | None,
+            Doc(
+                """
+                A callable that creates the Rich `Console` used to print help, usage errors,
+                aborts and pretty exception tracebacks. It receives a single boolean argument,
+                `True` when the output goes to standard error and `False` when it goes to
+                standard output, and must return a `rich.console.Console`.
+
+                Use `typer.rich_utils.get_rich_console()` inside the factory to start from
+                Typer's default console (with its theme and highlighter) and override only
+                what you need.
+
+                The factory is only called when something has to be printed, so Rich is
+                still loaded lazily. Sub apps added with `add_typer()` use the factory of
+                the root app.
+
+                See [the tutorial on customizing the Rich console](https://typer.tiangolo.com/tutorial/commands/help/#customize-the-rich-console) for more information.
+
+                **Example**
+
+                ```python
+                import typer
+
+
+                def get_console(stderr: bool):
+                    from typer.rich_utils import get_rich_console
+
+                    return get_rich_console(stderr=stderr, width=100, force_terminal=True)
+
+
+                app = typer.Typer(rich_console_factory=get_console)
+                ```
+                """
+            ),
+        ] = None,
         suggest_commands: Annotated[
             bool,
             Doc(
@@ -520,6 +560,7 @@ class Typer:
         self._add_completion = add_completion
         self.rich_markup_mode: MarkupMode = rich_markup_mode
         self.rich_help_panel = rich_help_panel
+        self.rich_console_factory = rich_console_factory
         self.suggest_commands = suggest_commands
         self.pretty_exceptions_enable = pretty_exceptions_enable
         self.pretty_exceptions_show_locals = pretty_exceptions_show_locals
@@ -1149,6 +1190,7 @@ class Typer:
                     pretty_exceptions_enable=self.pretty_exceptions_enable,
                     pretty_exceptions_show_locals=self.pretty_exceptions_show_locals,
                     pretty_exceptions_short=self.pretty_exceptions_short,
+                    rich_console_factory=self.rich_console_factory,
                 ),
             )
             raise e
@@ -1165,6 +1207,7 @@ def get_group(typer_instance: Typer) -> TyperGroup:
         TyperInfo(typer_instance),
         pretty_exceptions_short=typer_instance.pretty_exceptions_short,
         rich_markup_mode=typer_instance.rich_markup_mode,
+        rich_console_factory=typer_instance.rich_console_factory,
         suggest_commands=typer_instance.suggest_commands,
     )
     return group
@@ -1198,6 +1241,7 @@ def get_command(typer_instance: Typer) -> _click.Command:
             single_command,
             pretty_exceptions_short=typer_instance.pretty_exceptions_short,
             rich_markup_mode=typer_instance.rich_markup_mode,
+            rich_console_factory=typer_instance.rich_console_factory,
         )
         if typer_instance._add_completion:
             click_command.params.append(click_install_param)
@@ -1286,6 +1330,7 @@ def get_group_from_info(
     pretty_exceptions_short: bool,
     suggest_commands: bool,
     rich_markup_mode: MarkupMode,
+    rich_console_factory: RichConsoleFactory | None = None,
 ) -> TyperGroup:
     assert group_info.typer_instance, (
         "A Typer instance is needed to generate a Click Group"
@@ -1296,6 +1341,7 @@ def get_group_from_info(
             command_info=command_info,
             pretty_exceptions_short=pretty_exceptions_short,
             rich_markup_mode=rich_markup_mode,
+            rich_console_factory=rich_console_factory,
         )
         if command.name:
             commands[command.name] = command
@@ -1304,6 +1350,7 @@ def get_group_from_info(
             sub_group_info,
             pretty_exceptions_short=pretty_exceptions_short,
             rich_markup_mode=rich_markup_mode,
+            rich_console_factory=rich_console_factory,
             suggest_commands=suggest_commands,
         )
         if sub_group.name:
@@ -1352,6 +1399,7 @@ def get_group_from_info(
         rich_markup_mode=rich_markup_mode,
         # Rich settings
         rich_help_panel=solved_info.rich_help_panel,
+        rich_console_factory=rich_console_factory,
         suggest_commands=suggest_commands,
     )
     return group
@@ -1394,6 +1442,7 @@ def get_command_from_info(
     *,
     pretty_exceptions_short: bool,
     rich_markup_mode: MarkupMode,
+    rich_console_factory: RichConsoleFactory | None = None,
 ) -> _click.Command:
     assert command_info.callback, "A command must have a callback function"
     name = command_info.name or get_command_name(command_info.callback.__name__)  # ty: ignore
@@ -1430,6 +1479,7 @@ def get_command_from_info(
         rich_markup_mode=rich_markup_mode,
         # Rich settings
         rich_help_panel=command_info.rich_help_panel,
+        rich_console_factory=rich_console_factory,
     )
     return command
 
